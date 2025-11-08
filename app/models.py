@@ -4,6 +4,7 @@ import uuid
 
 from pydantic import EmailStr
 from sqlmodel import Field, Relationship, SQLModel
+from sqlalchemy.orm import relationship
 
 
 # Shared properties
@@ -54,16 +55,22 @@ class UpdatePassword(SQLModel):
 #     transactions: list["Transaction"] = Relationship(back_populates="user", cascade_delete=True)
 #     sms_history: list["SmsHistory"] = Relationship(back_populates="user", cascade_delete=True)
 class User(UserBase, table=True):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    hashed_password: str
-    items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
-    api_keys: list["ApiKey"] = Relationship(back_populates="owner", cascade_delete=True)
-    templates: list["Template"] = Relationship(back_populates="owner", cascade_delete=True)
-    transactions: list["Transaction"] = Relationship(back_populates="user", cascade_delete=True)
-    sms_history: list["SmsHistory"] = Relationship(back_populates="user", cascade_delete=True)
-    contacts: list["Contact"] = Relationship(back_populates="user", cascade_delete=True)
-    contact_groups: list["ContactGroup"] = Relationship(back_populates="user", cascade_delete=True)
-    tickets: list["Ticket"] = Relationship(back_populates="user", cascade_delete=True)
+  id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
+  hashed_password: str
+  items: list["Item"] = Relationship(back_populates="owner", cascade_delete=True)
+  api_keys: list["ApiKey"] = Relationship(back_populates="owner", cascade_delete=True)
+  templates: list["Template"] = Relationship(back_populates="owner", cascade_delete=True)
+  transactions: list["Transaction"] = Relationship(back_populates="user", cascade_delete=True)
+  sms_history: list["SmsHistory"] = Relationship(back_populates="user", cascade_delete=True)
+  contacts: list["Contact"] = Relationship(back_populates="user", cascade_delete=True)
+  contact_groups: list["ContactGroup"] = Relationship(back_populates="user", cascade_delete=True)
+  tickets: list["Ticket"] = Relationship(
+    back_populates="user", 
+    cascade_delete=True,
+    sa_relationship_kwargs={"foreign_keys": "[Ticket.user_id]"}
+)
+    
+
 
 
 # Properties to return via API, id is always required
@@ -231,7 +238,7 @@ class TemplatesPublic(SQLModel):
 
 class TransactionBase(SQLModel):
     transaction_type: str = Field(max_length=50)  # 'credit', 'debit', 'payment', 'refund'
-    amount: float = Field(gt=100.0)  # Amount must be greater than 0
+    amount: float = Field(ge=0.0)  # Amount must be greater or equal to 0
     currency: str = Field(default="UGX", max_length=10)
     description: str | None = Field(default=None, max_length=500)
     status: str = Field(default="pending", max_length=50)  # 'pending', 'completed', 'failed', 'cancelled'
@@ -555,7 +562,10 @@ class Ticket(TicketBase, table=True):
     user_id: uuid.UUID = Field(
         foreign_key="user.id", nullable=False, ondelete="CASCADE", index=True
     )
-    user: User | None = Relationship(back_populates="tickets")
+    user: User | None = Relationship(
+        back_populates="tickets",
+        sa_relationship_kwargs={"foreign_keys": "[Ticket.user_id]"}
+    )
     
     # Support agent assigned to ticket (optional)
     assigned_to: uuid.UUID | None = Field(
@@ -584,7 +594,7 @@ class TicketsPublic(SQLModel):
     count: int
 
 
-# ============= Ticket Responses ============================================================
+# ============= Ticket Responses =============
 
 class TicketResponseBase(SQLModel):
     message: str = Field(max_length=2000)
@@ -623,11 +633,3 @@ class TicketResponsePublic(TicketResponseBase):
 class TicketResponsesPublic(SQLModel):
     data: list[TicketResponsePublic]
     count: int
-
-
-
-
-
-
-
-

@@ -3,11 +3,11 @@ import uuid
 from typing import Any
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from sqlmodel import select
 from pydantic import BaseModel, Field
 
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import CurrentUser, SessionDep, get_current_active_superuser
 from app.models import Transaction, User, Message
 
 router = APIRouter(prefix="/user-data", tags=["user-data"])
@@ -154,6 +154,138 @@ def change_plan(
     # Update plan and SMS cost
     old_plan = user.plan_sub
     old_sms_cost = user.sms_cost
+    
+    user.plan_sub = new_plan
+    user.sms_cost = PLANS[new_plan]["sms_cost"]
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return UserProfileResponse(
+        id=user.id,
+        email=user.email,
+        full_name=user.full_name,
+        plan_sub=user.plan_sub,
+        wallet=user.wallet, # type: ignore
+        sms_cost=user.sms_cost,
+        is_active=user.is_active
+    )
+
+
+@router.post("/admin/{user_id}/add-funds", response_model=WalletResponse, dependencies=[Depends(get_current_active_superuser)])
+def admin_add_funds_to_wallet(
+    *,
+    session: SessionDep,
+    user_id: uuid.UUID,
+    funds_request: AddFundsRequest
+) -> Any:
+    """
+    Add funds to a specific user's wallet. (Admin only)
+    """
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    current_balance = float(user.wallet or "0.0")
+    new_balance = current_balance + funds_request.amount
+    
+    user.wallet = f"{new_balance:.2f}"
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    transaction = Transaction(
+        user_id=user.id,
+        transaction_type="credit",
+        amount=funds_request.amount,
+        status="completed",
+        payment_method=funds_request.payment_method or "admin_grant",
+        reference_number=funds_request.reference_number,
+        description=f"Admin added funds to wallet",
+        balance_before=current_balance,
+        balance_after=new_balance
+    )
+    session.add(transaction)
+    session.commit()
+    
+    return WalletResponse(
+        user_id=user.id,
+        wallet_balance=user.wallet,
+        currency="UGX"
+    )
+
+
+@router.post("/admin/{user_id}/deduct-funds", response_model=WalletResponse, dependencies=[Depends(get_current_active_superuser)])
+def admin_deduct_funds_from_wallet(
+    *,
+    session: SessionDep,
+    user_id: uuid.UUID,
+    deduct_request: DeductFundsRequest
+) -> Any:
+    """
+    Deduct funds from a specific user's wallet. (Admin only)
+    """
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    current_balance = float(user.wallet or "0.0")
+    
+    if current_balance < deduct_request.amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient balance. Current balance: {current_balance} UGX, Required: {deduct_request.amount} UGX"
+        )
+    
+    new_balance = current_balance - deduct_request.amount
+    user.wallet = f"{new_balance:.2f}"
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    transaction = Transaction(
+        user_id=user.id,
+        transaction_type="debit",
+        amount=deduct_request.amount,
+        status="completed",
+        description=deduct_request.reason or "Admin deduction",
+        balance_before=current_balance,
+        balance_after=new_balance
+    )
+    session.add(transaction)
+    session.commit()
+    
+    return WalletResponse(
+        user_id=user.id,
+        wallet_balance=user.wallet,
+        currency="UGX"
+    )
+
+
+@router.post("/admin/{user_id}/change-plan", response_model=UserProfileResponse, dependencies=[Depends(get_current_active_superuser)])
+def admin_change_plan(
+    *,
+    session: SessionDep,
+    user_id: uuid.UUID,
+    plan_request: ChangePlanRequest
+) -> Any:
+    """
+    Change a specific user's subscription plan. (Admin only)
+    """
+    new_plan = plan_request.new_plan
+    
+    if new_plan not in PLANS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid plan. Available plans: {', '.join(PLANS.keys())}"
+        )
+    
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
     user.plan_sub = new_plan
     user.sms_cost = PLANS[new_plan]["sms_cost"]

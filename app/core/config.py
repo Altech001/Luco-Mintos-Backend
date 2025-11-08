@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     FIRST_SUPERUSER: EmailStr
     FIRST_SUPERUSER_PASSWORD: str
 
+    # Keepalive / health check pinger (useful on platforms that idle sleeping apps)
+    PING_URL: HttpUrl | None = None  # e.g. https://your-app.onrender.com/health
+    PING_INTERVAL_SECONDS: int = 30
+    ENABLE_KEEPALIVE: bool = False
+
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
             message = (

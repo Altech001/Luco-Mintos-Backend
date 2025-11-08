@@ -96,7 +96,7 @@ def create_promo_code(
     session.commit()
     session.refresh(promo_code)
     
-    return promo_code
+    return PromoCodePublic.model_validate(promo_code, from_attributes=True)
 
 
 @router.get("/", response_model=PromoCodesPublic)
@@ -127,7 +127,8 @@ def get_all_promo_codes(
     
     count = len(session.exec(count_statement).all())
     
-    return PromoCodesPublic(data=promo_codes, count=count)
+    promo_codes_public = [PromoCodePublic.model_validate(pc, from_attributes=True) for pc in promo_codes]
+    return PromoCodesPublic(data=promo_codes_public, count=count)
 
 
 @router.get("/{code}", response_model=PromoCodePublic)
@@ -149,7 +150,7 @@ def get_promo_code(
     if not promo_code:
         raise HTTPException(status_code=404, detail="Promo code not found")
     
-    return promo_code
+    return PromoCodePublic.model_validate(promo_code, from_attributes=True)
 
 
 @router.patch("/{promo_id}", response_model=PromoCodePublic)
@@ -178,7 +179,7 @@ def update_promo_code(
     session.commit()
     session.refresh(promo_code)
     
-    return promo_code
+    return PromoCodePublic.model_validate(promo_code, from_attributes=True)
 
 
 @router.delete("/{promo_id}", response_model=Message)

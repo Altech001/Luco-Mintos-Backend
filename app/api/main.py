@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 
-from app.api.routes import items, login, private, smssend, users, utils, api_keys, templates, userdata, promocodes, contactsgroup,tickets
+from app.api.routes import items, login, private, smssend, users, utils, api_keys, templates, userdata, promocodes, contactsgroup,tickets, transcations, historysms
 from app.core.config import settings
 
 api_router = APIRouter()
@@ -16,6 +16,9 @@ api_router.include_router(smssend.router)
 api_router.include_router(promocodes.router)
 api_router.include_router(contactsgroup.router)
 api_router.include_router(tickets.router)
+api_router.include_router(transcations.router)
+api_router.include_router(historysms.router)
+
 
 
 

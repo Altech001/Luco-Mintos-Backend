@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import col, delete, func, select
 
 from app import crud
@@ -224,3 +225,52 @@ def delete_user(
     session.delete(user)
     session.commit()
     return Message(message="User deleted successfully")
+
+
+# ===== Superadmin: Update user SMS cost =====
+class SmsCostUpdate(BaseModel):
+    sms_cost: str
+
+
+@router.patch(
+    "/{user_id}/sms-cost",
+    dependencies=[Depends(get_current_active_superuser)],
+    response_model=UserPublic,
+)
+def update_user_sms_cost(
+    *, session: SessionDep, user_id: uuid.UUID, body: SmsCostUpdate
+) -> Any:
+    """
+    Superadmin can update a user's SMS cost to any value (string stored on User.sms_cost).
+    """
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.sms_cost = body.sms_cost
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
+@router.post(
+    "/{user_id}/sms-cost/reset",
+    dependencies=[Depends(get_current_active_superuser)],
+    response_model=UserPublic,
+)
+def reset_user_sms_cost(
+    *, session: SessionDep, user_id: uuid.UUID
+) -> Any:
+    """
+    Superadmin can reset a user's SMS cost back to default '32'.
+    """
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user.sms_cost = "32"
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
