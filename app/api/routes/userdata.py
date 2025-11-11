@@ -16,22 +16,22 @@ router = APIRouter(prefix="/user-data", tags=["user-data"])
 # Pricing plans configuration
 PLANS = {
     "Basic": {
-        "sms_cost": "32",
+        "sms_cost": "35",
         "description": "Basic plan with standard SMS rates",
-        "features": ["Standard SMS delivery", "Basic templates", "Email support"]
+        "features": ["Standard SMS delivery", "Basic templates", "Email support", "API access"]
     },
     "Standard": {
-        "sms_cost": "28",
+        "sms_cost": "33",
         "description": "Standard plan with reduced SMS rates",
         "features": ["Priority SMS delivery", "Unlimited templates", "Email support", "API access"]
     },
     "Premium": {
-        "sms_cost": "24",
+        "sms_cost": "32",
         "description": "Premium plan with best SMS rates",
         "features": ["Priority SMS delivery", "Unlimited templates", "24/7 Phone support", "API access", "Advanced analytics"]
     },
     "Enterprise": {
-        "sms_cost": "20",
+        "sms_cost": "30",
         "description": "Enterprise plan with lowest SMS rates",
         "features": ["Dedicated SMS delivery", "Unlimited everything", "24/7 Priority support", "API access", "Advanced analytics", "Custom integrations"]
     }
