@@ -78,9 +78,38 @@ class SendSMSResponse(BaseModel):
 class SendSMSRequest(BaseModel):
     to: List[str] = Field(..., description="Phone numbers in international format")
     message: str = Field(..., min_length=1, max_length=1600)
-    from_: Optional[str] = Field(None, alias="from")
+    from_: Optional[str] = Field(default= "ATUpdates", alias="from")
     template_id: Optional[uuid.UUID] = None  # Changed from str to uuid.UUID
     enqueue: bool = True
+
+# ====================== Helper: Phone Number Normalizer ======================
+def normalize_phone_number(phone: str) -> str:
+    """
+    Normalize phone numbers to Uganda international format (+256).
+    Handles formats: 7xx, 07xx, 2567xx, 256xxx, +256xxx
+    Returns: +256xxxxxxxxx
+    """
+    # Remove all spaces, dashes, and parentheses
+    phone = phone.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    
+    # Remove leading + if present
+    if phone.startswith("+"):
+        phone = phone[1:]
+    
+    # Handle different formats
+    if phone.startswith("256"):
+        # Already has country code: 256xxx or 2567xx
+        return f"+{phone}"
+    elif phone.startswith("0"):
+        # Format: 07xx -> +2567xx
+        return f"+256{phone[1:]}"
+    elif phone.startswith("7"):
+        # Format: 7xx -> +2567xx
+        return f"+256{phone}"
+    else:
+        # Assume it's already in correct format or invalid
+        # Return as-is with + prefix if not present
+        return f"+{phone}" if not phone.startswith("+") else phone
 
 # ====================== Helper: Deduct Wallet + Log Transaction ======================
 def deduct_and_log_wallet(
@@ -128,8 +157,12 @@ async def send_sms(
     - Transaction + SMS history logging
     - Template support
     - Real-time delivery via WebSocket
+    - Phone number normalization
     - No Celery needed
     """
+    # Normalize phone numbers to +256 format
+    normalized_recipients = [normalize_phone_number(phone) for phone in payload.to]
+    
     # Resolve template
     final_message = payload.message
     template_id = payload.template_id
@@ -143,7 +176,7 @@ async def send_sms(
     # Calculate SMS units (160 chars = 1 SMS)
     msg_len = len(final_message)
     sms_units = (msg_len // 153) + (1 if msg_len % 153 else 0) if msg_len > 160 else 1
-    recipients_count = len(payload.to)
+    recipients_count = len(normalized_recipients)
     cost_per_sms = Decimal(current_user.sms_cost or "32")
     total_cost = cost_per_sms * sms_units * recipients_count
 
@@ -153,10 +186,10 @@ async def send_sms(
     sender = payload.from_ or at_sender_id or "ATUpdates"
 
     try:
-        # Send via Africa's Talking
+        # Send via Africa's Talking with normalized numbers
         response = sms.send(
             message=final_message,
-            recipients=payload.to,
+            recipients=normalized_recipients,
             sender_id=sender,
             enqueue=1 if payload.enqueue else 0,
         )
